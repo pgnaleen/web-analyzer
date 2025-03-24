@@ -21,7 +21,7 @@ type PageAnalysis struct {
 	HasLoginForm      bool
 }
 
-func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) PageAnalysis {
+func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) *PageAnalysis {
 
 	// Read full response body
 	//The key issue here is that io.ReadAll(resp.Body) consumes the stream, so if it's read again, it returns zero bytes.
@@ -29,16 +29,9 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 	if err != nil {
 		logger.Error("Failed to read response body", slog.String("error", err.Error()))
 		http.Error(w, "Error reading HTML", http.StatusInternalServerError)
-		return PageAnalysis{
-			Title:             "",
-			HTMLVersion:       "",
-			Headings:          make(map[string]int),
-			InternalLinks:     0,
-			ExternalLinks:     0,
-			InaccessibleLinks: 0,
-			HasLoginForm:      false,
-		}
+		return nil
 	}
+
 	version := ExtractDoctype(body)
 
 	bodyCopy := bytes.NewReader(body)
@@ -47,15 +40,7 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 	if err != nil {
 		logger.Error("Failed to parse HTML", slog.String("error", err.Error()))
 		http.Error(w, "Invalid HTML document", http.StatusInternalServerError)
-		return PageAnalysis{
-			Title:             "",
-			HTMLVersion:       "",
-			Headings:          make(map[string]int),
-			InternalLinks:     0,
-			ExternalLinks:     0,
-			InaccessibleLinks: 0,
-			HasLoginForm:      false,
-		}
+		return nil
 	}
 
 	var title string
@@ -98,7 +83,7 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 
 	traverse(doc)
 
-	return PageAnalysis{
+	return &PageAnalysis{
 		Title:             title,
 		HTMLVersion:       version,
 		Headings:          headings,
