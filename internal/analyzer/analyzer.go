@@ -1,7 +1,13 @@
 package analyzer
 
 import (
+	"bufio"
+	"bytes"
 	"golang.org/x/net/html"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
 	"strings"
 )
 
@@ -15,8 +21,44 @@ type PageAnalysis struct {
 	HasLoginForm      bool
 }
 
-func AnalyzeHTML(doc *html.Node, baseURL string) PageAnalysis {
-	var title, version string
+func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) PageAnalysis {
+
+	// Read full response body
+	//The key issue here is that io.ReadAll(resp.Body) consumes the stream, so if it's read again, it returns zero bytes.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("Failed to read response body", slog.String("error", err.Error()))
+		http.Error(w, "Error reading HTML", http.StatusInternalServerError)
+		return PageAnalysis{
+			Title:             "",
+			HTMLVersion:       "",
+			Headings:          make(map[string]int),
+			InternalLinks:     0,
+			ExternalLinks:     0,
+			InaccessibleLinks: 0,
+			HasLoginForm:      false,
+		}
+	}
+	version := ExtractDoctype(body)
+
+	bodyCopy := bytes.NewReader(body)
+
+	doc, err := html.Parse(bodyCopy)
+	if err != nil {
+		logger.Error("Failed to parse HTML", slog.String("error", err.Error()))
+		http.Error(w, "Invalid HTML document", http.StatusInternalServerError)
+		return PageAnalysis{
+			Title:             "",
+			HTMLVersion:       "",
+			Headings:          make(map[string]int),
+			InternalLinks:     0,
+			ExternalLinks:     0,
+			InaccessibleLinks: 0,
+			HasLoginForm:      false,
+		}
+	}
+
+	var title string
 	headings := make(map[string]int)
 	internalLinks, externalLinks, inaccessibleLinks := 0, 0, 0
 	hasLoginForm := false
@@ -65,4 +107,22 @@ func AnalyzeHTML(doc *html.Node, baseURL string) PageAnalysis {
 		InaccessibleLinks: inaccessibleLinks,
 		HasLoginForm:      hasLoginForm,
 	}
+}
+
+// ExtractDoctype reads the first line from the HTML response to detect the doctype
+func ExtractDoctype(body []byte) string {
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	for scanner.Scan() {
+		line := strings.ToLower(scanner.Text())
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+		logger.Info(line)
+		if strings.Contains(line, "<!doctype html>") {
+			return "HTML5"
+		} else if strings.Contains(line, "xhtml 1.0") {
+			return "XHTML 1.0"
+		} else if strings.Contains(line, "html 4.01") {
+			return "HTML 4.01"
+		}
+	}
+	return "Unknown"
 }
