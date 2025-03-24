@@ -1,19 +1,3 @@
-//package main
-//
-//import (
-//	"context"
-//	"log/slog"
-//	"net/http"
-//	"os"
-//	"sync"
-//	"time"
-//)
-//
-//func main() {
-//	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)) // JSON output
-//	logger.Info("User logged in", "user", "Nalin", "age", 34)
-//}
-
 package main
 
 import (
