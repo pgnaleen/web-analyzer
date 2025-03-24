@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
-	"golang.org/x/net/html"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -36,15 +35,8 @@ func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 		}
 		defer resp.Body.Close()
 
-		doc, err := html.Parse(resp.Body)
-		if err != nil {
-			logger.Error("Failed to parse HTML", slog.String("error", err.Error()))
-			http.Error(w, "Invalid HTML document", http.StatusInternalServerError)
-			return
-		}
-
 		// Call the AnalyzeHTML function
-		analysis := analyzer.AnalyzeHTML(doc, parsedURL.Scheme+"://"+parsedURL.Host)
+		analysis := analyzer.AnalyzeHTML(resp, parsedURL.Scheme+"://"+parsedURL.Host, logger, w)
 
 		// Return JSON response
 		w.Header().Set("Content-Type", "application/json")
