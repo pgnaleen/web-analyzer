@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -96,11 +95,10 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 
 // ExtractDoctype reads the first line from the HTML response to detect the doctype
 func ExtractDoctype(body []byte) string {
+
 	scanner := bufio.NewScanner(bytes.NewReader(body))
 	for scanner.Scan() {
 		line := strings.ToLower(scanner.Text())
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-		logger.Info(line)
 		if strings.Contains(line, "<!doctype html>") {
 			return "HTML5"
 		} else if strings.Contains(line, "xhtml 1.0") {
@@ -109,5 +107,6 @@ func ExtractDoctype(body []byte) string {
 			return "HTML 4.01"
 		}
 	}
+
 	return "Unknown"
 }
