@@ -42,7 +42,6 @@ func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 // RegisterRoutes sets up the API endpoints
 func RegisterRoutes(r *chi.Mux, logger *slog.Logger) {
 	mux := http.NewServeMux()
-	//http.HandleFunc("/analyze", AnalyzeHandler(logger))
 	mux.HandleFunc("/analyze", AnalyzeHandler(logger))
 	http.ListenAndServe(":8080", mux)
 }
