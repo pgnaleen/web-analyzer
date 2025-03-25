@@ -8,8 +8,12 @@ import (
 )
 
 func ValidateRequest(w http.ResponseWriter, r *http.Request, logger *slog.Logger) (*http.Response, *url.URL) {
-	urlQuery := r.URL.Query().Get("url")
+	if r.Method != "GET" {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return nil, nil
+	}
 
+	urlQuery := r.URL.Query().Get("url")
 	if urlQuery == "" {
 		http.Error(w, "Missing URL parameter", http.StatusBadRequest)
 		return nil, nil
