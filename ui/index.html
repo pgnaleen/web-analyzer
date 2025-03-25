@@ -4,58 +4,95 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Page Analyzer</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: auto;
-            text-align: center;
-        }
-        input, button {
-            margin: 10px;
-            padding: 10px;
-            width: 80%;
-        }
-        pre {
-            text-align: left;
-            background: #f4f4f4;
-            padding: 10px;
-            border-radius: 5px;
-        }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="min-h-screen bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center p-4">
+<div class="bg-white shadow-lg rounded-lg p-6 w-full max-w-lg">
+    <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">🔍 Web Page Analyzer</h1>
 
-<h2>Analyze a Web Page</h2>
+    <!-- URL Input and Analyze Button -->
+    <div class="flex gap-2">
+        <input type="text" id="urlInput" class="flex-grow p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter URL (e.g., https://example.com)">
+        <button onclick="analyzeURL()" class="bg-blue-600 text-white px-5 py-3 rounded-md hover:bg-blue-700 transition font-semibold">Analyze</button>
+    </div>
+    <p id="errorMsg" class="text-red-500 text-sm mt-2 hidden">⚠️ Please enter a valid URL</p>
 
-<input type="text" id="urlInput" placeholder="Enter URL (e.g., https://example.com)">
-<button onclick="analyzePage()">Analyze</button>
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="hidden flex justify-center mt-4">
+        <div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+    </div>
 
-<h3>Results:</h3>
-<pre id="result"></pre>
+    <!-- Results Section -->
+    <div id="results" class="mt-6 border-t pt-4 hidden">
+        <h2 class="text-lg font-semibold text-gray-700">📋 Analysis Results</h2>
+        <ul class="mt-2 text-sm text-gray-600 space-y-2">
+            <li>🏷️ <strong>Page Title:</strong> <span id="pageTitle"></span></li>
+            <li>📄 <strong>HTML Version:</strong> <span id="htmlVersion"></span></li>
+            <li>🔠 <strong>Headings:</strong> <span id="headings"></span></li>
+            <li>🔗 <strong>Internal Links:</strong> <span id="internalLinks"></span></li>
+            <li>🌍 <strong>External Links:</strong> <span id="externalLinks"></span></li>
+            <li>🚫 <strong>Inaccessible Links:</strong> <span id="inaccessibleLinks"></span></li>
+            <li>🔒 <strong>Login Form Detected:</strong> <span id="loginForm"></span></li>
+        </ul>
+    </div>
+</div>
 
 <script>
-    async function analyzePage() {
-        const url = document.getElementById("urlInput").value;
-        if (!url) {
-            alert("Please enter a URL.");
+    async function analyzeURL() {
+        const urlInput = document.getElementById("urlInput").value.trim();
+        const errorMsg = document.getElementById("errorMsg");
+        const loadingSpinner = document.getElementById("loadingSpinner");
+        const results = document.getElementById("results");
+
+        if (!urlInput) {
+            errorMsg.classList.remove("hidden");
             return;
         }
+        errorMsg.classList.add("hidden");
 
-        const response = await fetch("http://localhost:8080/analyze?url="+url, {
-            method: "GET",
-            headers: { "Content-Type": "application/json" }
-        });
+        loadingSpinner.classList.remove("hidden");
+        results.classList.add("hidden");
 
-        if (!response.ok) {
-            document.getElementById("result").textContent = "Error: Failed to analyze the page.";
-            return;
+        try {
+            const response = await fetch("http://localhost:8080/analyze?url=" + urlInput, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" }
+            });
+
+            if (!response.ok) throw new Error("Failed to analyze URL");
+
+            const data = await response.json();
+            // Populate results
+            document.getElementById("htmlVersion").innerText = data.html_version || "Unknown";
+            document.getElementById("pageTitle").innerText = data.title || "No title found";
+            document.getElementById("internalLinks").innerText = data.internal_links || "0";
+            document.getElementById("externalLinks").innerText = data.external_links || "0";
+            document.getElementById("inaccessibleLinks").innerText = data.inaccessible_links || "0";
+            document.getElementById("loginForm").innerText = data.has_login_form ? "Yes" : "No";
+
+            // Handle headings object (Convert it to a readable format)
+            const headingsContainer = document.getElementById("headings");
+            headingsContainer.innerHTML = ""; // Clear previous results
+
+            if (data.headings && Object.keys(data.headings).length > 0) {
+                Object.entries(data.headings).forEach(([level, count]) => {
+                    const headingElement = document.createElement("li");
+                    headingElement.innerText = `${level.toUpperCase()}: ${count}`;
+                    headingsContainer.appendChild(headingElement);
+                });
+            } else {
+                headingsContainer.innerHTML = "<li>No headings found</li>";
+            }
+
+            loadingSpinner.classList.add("hidden");
+            results.classList.remove("hidden");
+
+        } catch (error) {
+            loadingSpinner.classList.add("hidden");
+            errorMsg.innerText = "Error: " + error.message;
+            errorMsg.classList.remove("hidden");
         }
-
-        const data = await response.json();
-        document.getElementById("result").textContent = JSON.stringify(data, null, 4);
     }
 </script>
-
 </body>
 </html>
