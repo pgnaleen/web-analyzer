@@ -23,12 +23,11 @@ RUN chmod +x ./scripts/start.sh
 RUN go build -o web-analyzer .
 
 # Use a minimal image for deployment
-FROM alpine:latest
+FROM ubuntu:latest
 
 # Install necessary certificates for HTTPS requests
-# is used in Alpine-based Docker images to install CA (Certificate Authority) certificates,
 # which are required to make secure HTTPS requests from within the container.
-RUN apk --no-cache add ca-certificates
+RUN  apt update &&  apt install -y ca-certificates
 
 # Set the working directory
 WORKDIR /root/
@@ -39,6 +38,7 @@ COPY --from=builder /app/web-analyzer .
 # Expose the application port
 EXPOSE 8080
 
+RUN chmod +x web-analyzer
+
 # Run the web application
-#ENTRYPOINT ["nohup /app/web-analyzer &"]
-ENTRYPOINT ["nohup /root/web-analyzer &"]
+ENTRYPOINT ["/root/web-analyzer"]
