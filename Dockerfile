@@ -26,7 +26,7 @@ FROM alpine:latest
 # Install necessary certificates for HTTPS requests
 # is used in Alpine-based Docker images to install CA (Certificate Authority) certificates,
 # which are required to make secure HTTPS requests from within the container.
-#RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates
 
 # Set the working directory
 WORKDIR /root/
@@ -38,4 +38,5 @@ COPY --from=builder /app/web-analyzer .
 EXPOSE 8080
 
 # Run the web application
-ENTRYPOINT ["./root/web-analyzer"]
+#ENTRYPOINT ["nohup /app/web-analyzer &"]
+ENTRYPOINT ["nohup /root/web-analyzer &"]
