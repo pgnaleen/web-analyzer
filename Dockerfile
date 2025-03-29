@@ -10,6 +10,8 @@ COPY go.mod go.sum ./
 # this is to download dependencies form golang
 RUN go env -w GOPROXY=http://proxy.golang.org,direct
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 RUN go mod download
 
 # Copy the application source code
