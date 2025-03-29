@@ -11,13 +11,13 @@ import (
 )
 
 type PageAnalysis struct {
-	Title             string
-	HTMLVersion       string
-	Headings          map[string]int
-	InternalLinks     int
-	ExternalLinks     int
-	InaccessibleLinks int
-	HasLoginForm      bool
+	Title             string         `json:"title"`
+	HTMLVersion       string         `json:"html_version"`
+	Headings          map[string]int `json:"headings"`
+	InternalLinks     int            `json:"internal_links"`
+	ExternalLinks     int            `json:"external_links"`
+	InaccessibleLinks int            `json:"inaccessible_links"`
+	HasLoginForm      bool           `json:"has_login_form"`
 }
 
 func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) *PageAnalysis {
@@ -33,9 +33,9 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 
 	version := ExtractDoctype(body)
 
-	bodyCopy := bytes.NewReader(body)
+	bodyReader := bytes.NewReader(body)
 
-	doc, err := html.Parse(bodyCopy)
+	doc, err := html.Parse(bodyReader)
 	if err != nil {
 		logger.Error("Failed to parse HTML", slog.String("error", err.Error()))
 		http.Error(w, "Invalid HTML document", http.StatusInternalServerError)
