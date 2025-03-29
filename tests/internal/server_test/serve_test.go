@@ -14,6 +14,7 @@ func TestAnalyzeHandler(t *testing.T) {
 	logger := slog.Default()
 	analyzeHandler := server.AnalyzeHandler(logger)
 
+	// Test option http method
 	t.Run("OPTIONS Request for CORS", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodOptions, "/analyze", nil)
 		w := httptest.NewRecorder()
@@ -24,6 +25,7 @@ func TestAnalyzeHandler(t *testing.T) {
 		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 	})
 
+	// test happy path with all the logic
 	t.Run("Direct Call to AnalyzeHandler", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/analyze?url=https://example.com", nil)
 		req.Header.Set("Content-Type", "application/json")
@@ -38,6 +40,7 @@ func TestAnalyzeHandler(t *testing.T) {
 		assert.NotEmpty(t, response)
 	})
 
+	// request without url query param
 	t.Run("Invalid Query param - Missing URL", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
 		req.Header.Set("Content-Type", "application/json")
