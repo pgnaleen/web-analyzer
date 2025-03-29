@@ -12,6 +12,8 @@ import (
 // AnalyzeHandler processes the URL and returns analysis results
 func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("Request received", "request method", r.Method, "request URI", r.RequestURI, "body", r.Body)
+
 		// Allow CORS
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
