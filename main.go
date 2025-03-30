@@ -27,8 +27,8 @@ func initServer(logger *slog.Logger) *http.Server {
 		serverInstance = &http.Server{
 			Addr:         ":8080",
 			Handler:      r,
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 10 * time.Second,
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 25 * time.Second,
 		}
 	})
 	return serverInstance
