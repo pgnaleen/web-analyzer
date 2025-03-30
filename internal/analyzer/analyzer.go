@@ -85,7 +85,6 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 			case "a":
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						logger.Info(baseURL)
 						if strings.HasPrefix(attr.Val, baseURL) || strings.HasPrefix(attr.Val, "/") {
 							internalLinks++
 						} else {
