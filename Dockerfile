@@ -36,7 +36,7 @@ WORKDIR /root/
 COPY --from=builder /app/web-analyzer .
 
 # Expose the application port
-EXPOSE 8080
+EXPOSE 8080 6060 9090
 
 RUN chmod +x web-analyzer
 

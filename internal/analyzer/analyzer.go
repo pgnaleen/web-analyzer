@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"bufio"
 	"bytes"
 	"golang.org/x/net/html"
 	"io"
@@ -11,59 +10,80 @@ import (
 )
 
 type PageAnalysis struct {
-	Title             string `json:"title"`
-	HTMLVersion       string `json:"html_version"`
-	Headings          [6]int `json:"headings"`
-	InternalLinks     int    `json:"internal_links"`
-	ExternalLinks     int    `json:"external_links"`
-	InaccessibleLinks int    `json:"inaccessible_links"`
-	HasLoginForm      bool   `json:"has_login_form"`
+	Title             string         `json:"title"`
+	HTMLVersion       string         `json:"html_version"`
+	Headings          map[string]int `json:"headings"`
+	InternalLinks     int            `json:"internal_links"`
+	ExternalLinks     int            `json:"external_links"`
+	InaccessibleLinks int            `json:"inaccessible_links"`
+	HasLoginForm      bool           `json:"has_login_form"`
 }
 
+// regex based string analyzer is the most easy one. But it loads to whole html into the memory
+// also need to go through in whole string. So most inefficient wrt memory and performance
+// further we can use tree traversing with html parser as we can assume this as strutured tree. In that approch also we need to load
+// into memory and not suitable for larger web pages although it uses incremental parsing like stream techniques.
+// best approach is tokenizer. It don't load whole html into memory instead it uses streaming approach. so optimized wrt
+// both memory and performance
 func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) *PageAnalysis {
-
-	// Use io.TeeReader to allow parsing without re-reading the body.
 	var buf bytes.Buffer
-
-	// using io.ReadAll would have duplicate memory allocations as that is loading entire response into memory and new
-	// copy should be there to send to ExtractDoctype function
-	respIOReader := io.TeeReader(resp.Body, &buf)
-
-	// Extract HTML version using same io reader (avoid copying full body by creating another byte steam)
-	version := ExtractDoctype(respIOReader)
-
-	// Parse HTML from the io reader
-	doc, err := html.Parse(respIOReader)
-	if err != nil {
-		logger.Error("Failed to parse HTML", slog.String("error", err.Error()))
-		http.Error(w, "Invalid HTML document", http.StatusInternalServerError)
-		return nil
-	}
-
-	var title string
-	var headings [6]int // Fixed-size array instead of map, this is for saving memory and make the operation fast
+	var title, htmlVersion string
+	headings := make(map[string]int)
 	internalLinks, externalLinks, inaccessibleLinks := 0, 0, 0
 	hasLoginForm := false
+	foundDoctype := false
 
-	var traverse func(*html.Node)
-	traverse = func(n *html.Node) {
-		if n.Type == html.ElementNode {
-			switch n.Data {
+	respBody := io.TeeReader(resp.Body, &buf)
+	tokenizer := html.NewTokenizer(respBody)
+
+	for {
+		tokenType := tokenizer.Next()
+		switch tokenType {
+		case html.ErrorToken:
+			if tokenizer.Err() == io.EOF {
+				return &PageAnalysis{
+					Title:             title,
+					HTMLVersion:       htmlVersion,
+					Headings:          headings,
+					InternalLinks:     internalLinks,
+					ExternalLinks:     externalLinks,
+					InaccessibleLinks: inaccessibleLinks,
+					HasLoginForm:      hasLoginForm,
+				}
+			}
+			logger.Error("Failed to parse HTML", slog.String("error", tokenizer.Err().Error()))
+			return nil
+
+		case html.DoctypeToken:
+			if !foundDoctype { // Extract only the first doctype
+				token := tokenizer.Token()
+				doctype := strings.ToLower(strings.TrimSpace(token.Data))
+
+				switch {
+				case strings.Contains(doctype, "html 4.01"):
+					htmlVersion = "HTML 4.01"
+				case strings.Contains(doctype, "xhtml 1.0"):
+					htmlVersion = "XHTML 1.0"
+				case strings.Contains(doctype, "html"):
+					htmlVersion = "HTML5"
+				default:
+					htmlVersion = "Unknown"
+				}
+				foundDoctype = true
+			}
+
+		case html.StartTagToken:
+			token := tokenizer.Token()
+			switch token.Data {
 			case "title":
-				if n.FirstChild != nil {
-					title = strings.TrimSpace(n.FirstChild.Data)
+				if tokenizer.Next() == html.TextToken {
+					title = strings.TrimSpace(tokenizer.Token().Data)
 				}
-			//	instead going one by one added all 6 to faster the extraction
+				break
 			case "h1", "h2", "h3", "h4", "h5", "h6":
-				// Convert 'hX' to an index (h1 → 0, h6 → 5)
-				if len(n.Data) == 2 && n.Data[0] == 'h' {
-					level := n.Data[1] - '1'
-					if level >= 0 && level < 6 {
-						headings[level]++
-					}
-				}
+				headings[token.Data]++
 			case "a":
-				for _, attr := range n.Attr {
+				for _, attr := range token.Attr {
 					if attr.Key == "href" {
 						if strings.HasPrefix(attr.Val, baseURL) {
 							internalLinks++
@@ -72,49 +92,15 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 						}
 					}
 				}
+				break
 			case "form":
-				for _, attr := range n.Attr {
+				for _, attr := range token.Attr {
 					if attr.Key == "action" && strings.Contains(attr.Val, "login") {
 						hasLoginForm = true
 					}
 				}
+				break
 			}
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			traverse(c)
-		}
 	}
-
-	traverse(doc)
-
-	return &PageAnalysis{
-		Title:             title,
-		HTMLVersion:       version,
-		Headings:          headings,
-		InternalLinks:     internalLinks,
-		ExternalLinks:     externalLinks,
-		InaccessibleLinks: inaccessibleLinks,
-		HasLoginForm:      hasLoginForm,
-	}
-}
-
-// ExtractDoctype reads the first line from the HTML response to detect the doctype
-func ExtractDoctype(r io.Reader) string {
-
-	// Here uses direct io reader instead converting to byte array
-	scanner := bufio.NewScanner(r)
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		// Using bytes.Contains() instead of converting to string (strings.Contains()) and changing to lower case
-		//	Stops scanning as soon as a match is found, reducing processing time.
-		if bytes.Contains(line, []byte("<!DOCTYPE html>")) || bytes.Contains(line, []byte("<!doctype html>")) {
-			return "HTML5"
-		} else if bytes.Contains(line, []byte("XHTML 1.0")) {
-			return "XHTML 1.0"
-		} else if bytes.Contains(line, []byte("HTML 4.01")) {
-			return "HTML 4.01"
-		}
-	}
-	return "Unknown"
 }

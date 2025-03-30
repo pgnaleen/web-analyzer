@@ -2,10 +2,10 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
 	"log/slog"
 	"net/http"
 	"web-analyzer/internal/analyzer"
+	"web-analyzer/internal/monitoring"
 	"web-analyzer/internal/utils"
 )
 
@@ -13,6 +13,7 @@ import (
 func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.Info("Request received", "request method", r.Method, "request URI", r.RequestURI, "body", r.Body)
+		monitoring.RecordRequest()
 
 		// Allow CORS
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -31,6 +32,7 @@ func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 		}
 
 		// closing the response body to avoid memory leaks
+		// defer schedules this response close after function exited to save memory
 		defer resp.Body.Close()
 
 		// Call the AnalyzeHTML function
@@ -43,7 +45,7 @@ func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 }
 
 // RegisterRoutes sets up the API endpoints
-func RegisterRoutes(r *chi.Mux, logger *slog.Logger) {
+func RegisterRoutes(logger *slog.Logger) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/analyze", AnalyzeHandler(logger))
 	http.ListenAndServe(":8080", mux)
