@@ -25,13 +25,13 @@ func ValidateRequest(w http.ResponseWriter, r *http.Request, logger *slog.Logger
 	// Ensures the URL is correctly structured and Ensures the URL contains a valid scheme (http or https)
 	parsedURL, err := url.Parse(urlQuery)
 	if err != nil || !parsedURL.IsAbs() {
-		logger.Error("Invalid URL format", slog.String("error", err.Error()))
+		logger.Error("Invalid URL format")
 		http.Error(w, "{\"error_code\":\"9001\",\"error_message\":\"Invalid URL format\"}", http.StatusBadRequest)
 		return nil, nil
 	}
 
 	// ensure domain structure, ports, and paths
-	re := regexp.MustCompile(`^(https?://)?[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(:\d+)?(/.*)?$`)
+	re := regexp.MustCompile(`^(https?://)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9-]+)+(:\d+)?(/.*)?$`)
 	if !re.MatchString(urlQuery) {
 		logger.Error("URL format does not match the expected pattern")
 		http.Error(w, "{\"error_code\":\"9002\",\"error_message\":\"URL format does not match the expected pattern\"}", http.StatusBadRequest)

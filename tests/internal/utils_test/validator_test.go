@@ -45,6 +45,44 @@ func TestValidateRequest(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
+	// request with invalid url domain to check regex
+	t.Run("Invalid URL Format 1", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/validate?url=ftp://example.com", nil)
+		rec := httptest.NewRecorder()
+
+		resp, parsedURL := utils.ValidateRequest(rec, req, logger)
+		assert.Nil(t, resp)
+		assert.Nil(t, parsedURL)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	// request with invalid url domain to check regex
+	t.Run("Invalid URL Format 1", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/validate?url=https://-example.com", nil)
+		rec := httptest.NewRecorder()
+
+		resp, parsedURL := utils.ValidateRequest(rec, req, logger)
+		assert.Nil(t, resp)
+		assert.Nil(t, parsedURL)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	// Failed to fetch URL
+	t.Run("Failed to fetch URL", func(t *testing.T) {
+		// Mock server to return a 200 response
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer mockServer.Close() // defer schedules this mock server close after function exited to save memory
+
+		req := httptest.NewRequest(http.MethodGet, "/validate?url=http://localhost.com", nil)
+		rec := httptest.NewRecorder()
+
+		resp, parsedURL := utils.ValidateRequest(rec, req, logger)
+		assert.Nil(t, resp)
+		assert.Nil(t, parsedURL)
+	})
+
 	// successful request to check happy path
 	t.Run("Successful Request", func(t *testing.T) {
 		// Mock server to return a 200 response

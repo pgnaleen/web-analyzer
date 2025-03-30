@@ -2,8 +2,6 @@ package monitoring
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
 )
 
 var (
@@ -25,14 +23,6 @@ func InitMetrics() {
 	prometheus.MustRegister(requestsTotal, pageLoadTime)
 }
 
-func MetricsHandler() http.Handler {
-	return promhttp.Handler()
-}
-
 func RecordRequest() {
 	requestsTotal.Inc()
-}
-
-func ObservePageLoad(duration float64) {
-	pageLoadTime.Observe(duration)
 }
