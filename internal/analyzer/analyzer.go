@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 type PageAnalysis struct {
@@ -33,6 +34,7 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 	internalLinks, externalLinks, inaccessibleLinks := 0, 0, 0
 	hasLoginForm := false
 	foundDoctype := false
+	var links []string
 
 	respBody := io.TeeReader(resp.Body, &buf)
 	tokenizer := html.NewTokenizer(respBody)
@@ -45,6 +47,17 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 		switch tokenType {
 		case html.ErrorToken:
 			if tokenizer.Err() == io.EOF {
+
+				// check accessible urls concurrently. this can't be done without concurrency as it would take a lot of time
+				for _, link := range links {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						if !isAccessible(link) {
+							inaccessibleLinks++
+						}
+					}()
+				}
 
 				// Wait for all goroutines to complete
 				wg.Wait()
@@ -90,9 +103,14 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 			case "a":
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						if strings.HasPrefix(attr.Val, baseURL) || strings.HasPrefix(attr.Val, "/") {
+						if strings.HasPrefix(attr.Val, baseURL) {
+							links = append(links, attr.Val)
+							internalLinks++
+						} else if strings.HasPrefix(attr.Val, "/") {
+							links = append(links, baseURL+attr.Val)
 							internalLinks++
 						} else {
+							links = append(links, attr.Val)
 							externalLinks++
 						}
 					}
@@ -123,4 +141,14 @@ func extractHTMLVersion(token html.Token) string {
 	default:
 		return "Unknown"
 	}
+}
+
+func isAccessible(url string) bool {
+	client := &http.Client{Timeout: 2000 * time.Millisecond}
+	resp, err := client.Get(url)
+	if err != nil || resp.StatusCode >= 400 {
+		return false
+	}
+	defer resp.Body.Close()
+	return true
 }
