@@ -41,7 +41,7 @@ func main() {
 	logger := utils.InitLogger()
 	logger.Info("Starting Web Analyzer API...")
 
-	// Start a separate server for pprof
+	// Start a separate server for pprof using goroutine
 	go func() {
 		logger.Info("Starting pprof server on :6060")
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil &&
@@ -51,7 +51,7 @@ func main() {
 	}()
 
 	monitoring.InitMetrics()
-	// Start Prometheus metrics endpoint
+	// Start separate Prometheus metrics endpoint using goroutine
 	go func() {
 		logger.Info("Starting Prometheus metrics server on :9090")
 		http.Handle("/metrics", promhttp.Handler())

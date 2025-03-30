@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type PageAnalysis struct {
@@ -27,7 +28,7 @@ type PageAnalysis struct {
 // both memory and performance
 func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) *PageAnalysis {
 	var buf bytes.Buffer
-	var title, htmlVersion string
+	var title string
 	headings := make(map[string]int)
 	internalLinks, externalLinks, inaccessibleLinks := 0, 0, 0
 	hasLoginForm := false
@@ -36,14 +37,22 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 	respBody := io.TeeReader(resp.Body, &buf)
 	tokenizer := html.NewTokenizer(respBody)
 
+	var wg sync.WaitGroup
+	htmlVersionChan := make(chan string, 1)
+
 	for {
 		tokenType := tokenizer.Next()
 		switch tokenType {
 		case html.ErrorToken:
 			if tokenizer.Err() == io.EOF {
+
+				// Wait for all goroutines to complete
+				wg.Wait()
+				close(htmlVersionChan)
+
 				return &PageAnalysis{
 					Title:             title,
-					HTMLVersion:       htmlVersion,
+					HTMLVersion:       <-htmlVersionChan, // data can be taken only once from the channel
 					Headings:          headings,
 					InternalLinks:     internalLinks,
 					ExternalLinks:     externalLinks,
@@ -56,19 +65,15 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 
 		case html.DoctypeToken:
 			if !foundDoctype { // Extract only the first doctype
-				token := tokenizer.Token()
-				doctype := strings.ToLower(strings.TrimSpace(token.Data))
+				token := tokenizer.Token() // can't pass tokenizer to goroutine as it is changing
 
-				switch {
-				case strings.Contains(doctype, "html 4.01"):
-					htmlVersion = "HTML 4.01"
-				case strings.Contains(doctype, "xhtml 1.0"):
-					htmlVersion = "XHTML 1.0"
-				case strings.Contains(doctype, "html"):
-					htmlVersion = "HTML5"
-				default:
-					htmlVersion = "Unknown"
-				}
+				// Extract HTML Version
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					htmlVersionChan <- extractHTMLVersion(token)
+				}()
+
 				foundDoctype = true
 			}
 
@@ -102,5 +107,20 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 				break
 			}
 		}
+	}
+}
+
+func extractHTMLVersion(token html.Token) string {
+	doctype := strings.ToLower(strings.TrimSpace(token.Data))
+
+	switch {
+	case strings.Contains(doctype, "html 4.01"):
+		return "HTML 4.01"
+	case strings.Contains(doctype, "xhtml 1.0"):
+		return "XHTML 1.0"
+	case strings.Contains(doctype, "html"):
+		return "HTML5"
+	default:
+		return "Unknown"
 	}
 }
