@@ -30,6 +30,7 @@ func AnalyzeHandler(logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
+		// closing the response body to avoid memory leaks
 		defer resp.Body.Close()
 
 		// Call the AnalyzeHTML function

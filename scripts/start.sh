@@ -1,2 +1,2 @@
 #!/bin/sh
-./app/web-analyzer
+/root/web-analyzer

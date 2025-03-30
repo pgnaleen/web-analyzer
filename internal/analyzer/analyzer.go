@@ -11,31 +11,29 @@ import (
 )
 
 type PageAnalysis struct {
-	Title             string         `json:"title"`
-	HTMLVersion       string         `json:"html_version"`
-	Headings          map[string]int `json:"headings"`
-	InternalLinks     int            `json:"internal_links"`
-	ExternalLinks     int            `json:"external_links"`
-	InaccessibleLinks int            `json:"inaccessible_links"`
-	HasLoginForm      bool           `json:"has_login_form"`
+	Title             string `json:"title"`
+	HTMLVersion       string `json:"html_version"`
+	Headings          [6]int `json:"headings"`
+	InternalLinks     int    `json:"internal_links"`
+	ExternalLinks     int    `json:"external_links"`
+	InaccessibleLinks int    `json:"inaccessible_links"`
+	HasLoginForm      bool   `json:"has_login_form"`
 }
 
 func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w http.ResponseWriter) *PageAnalysis {
 
-	// Read full response body
-	//The key issue here is that io.ReadAll(resp.Body) consumes the stream, so if it's read again, it returns zero bytes.
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logger.Error("Failed to read response body", slog.String("error", err.Error()))
-		http.Error(w, "Error reading HTML", http.StatusInternalServerError)
-		return nil
-	}
+	// Use io.TeeReader to allow parsing without re-reading the body.
+	var buf bytes.Buffer
 
-	version := ExtractDoctype(body)
+	// using io.ReadAll would have duplicate memory allocations as that is loading entire response into memory and new
+	// copy should be there to send to ExtractDoctype function
+	respIOReader := io.TeeReader(resp.Body, &buf)
 
-	bodyReader := bytes.NewReader(body)
+	// Extract HTML version using same io reader (avoid copying full body by creating another byte steam)
+	version := ExtractDoctype(respIOReader)
 
-	doc, err := html.Parse(bodyReader)
+	// Parse HTML from the io reader
+	doc, err := html.Parse(respIOReader)
 	if err != nil {
 		logger.Error("Failed to parse HTML", slog.String("error", err.Error()))
 		http.Error(w, "Invalid HTML document", http.StatusInternalServerError)
@@ -43,7 +41,7 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 	}
 
 	var title string
-	headings := make(map[string]int)
+	var headings [6]int // Fixed-size array instead of map, this is for saving memory and make the operation fast
 	internalLinks, externalLinks, inaccessibleLinks := 0, 0, 0
 	hasLoginForm := false
 
@@ -55,8 +53,15 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 				if n.FirstChild != nil {
 					title = strings.TrimSpace(n.FirstChild.Data)
 				}
+			//	instead going one by one added all 6 to faster the extraction
 			case "h1", "h2", "h3", "h4", "h5", "h6":
-				headings[n.Data]++
+				// Convert 'hX' to an index (h1 → 0, h6 → 5)
+				if len(n.Data) == 2 && n.Data[0] == 'h' {
+					level := n.Data[1] - '1'
+					if level >= 0 && level < 6 {
+						headings[level]++
+					}
+				}
 			case "a":
 				for _, attr := range n.Attr {
 					if attr.Key == "href" {
@@ -94,19 +99,22 @@ func AnalyzeHTML(resp *http.Response, baseURL string, logger *slog.Logger, w htt
 }
 
 // ExtractDoctype reads the first line from the HTML response to detect the doctype
-func ExtractDoctype(body []byte) string {
+func ExtractDoctype(r io.Reader) string {
 
-	scanner := bufio.NewScanner(bytes.NewReader(body))
+	// Here uses direct io reader instead converting to byte array
+	scanner := bufio.NewScanner(r)
+
 	for scanner.Scan() {
-		line := strings.ToLower(scanner.Text())
-		if strings.Contains(line, "<!doctype html>") {
+		line := scanner.Bytes()
+		// Using bytes.Contains() instead of converting to string (strings.Contains()) and changing to lower case
+		//	Stops scanning as soon as a match is found, reducing processing time.
+		if bytes.Contains(line, []byte("<!DOCTYPE html>")) || bytes.Contains(line, []byte("<!doctype html>")) {
 			return "HTML5"
-		} else if strings.Contains(line, "xhtml 1.0") {
+		} else if bytes.Contains(line, []byte("XHTML 1.0")) {
 			return "XHTML 1.0"
-		} else if strings.Contains(line, "html 4.01") {
+		} else if bytes.Contains(line, []byte("HTML 4.01")) {
 			return "HTML 4.01"
 		}
 	}
-
 	return "Unknown"
 }
