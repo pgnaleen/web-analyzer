@@ -22,7 +22,7 @@ RUN chmod +x ./scripts/start.sh
 # Build the Go application
 RUN go build -o web-analyzer .
 
-# Use a minimal image for deployment
+# Used a alpine minimal image for deployment. But there was issue while connecting to https due to certificates issues
 FROM ubuntu:latest
 
 # Install necessary certificates for HTTPS requests
