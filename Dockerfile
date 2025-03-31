@@ -29,16 +29,22 @@ FROM ubuntu:latest
 # which are required to make secure HTTPS requests from within the container.
 RUN  apt update &&  apt install -y ca-certificates
 
+# Install NGINX to serve the index.html
+RUN apt update && apt install -y nginx
+
 # Set the working directory
 WORKDIR /root/
+
+# Copy the index.html into the NGINX html directory
+COPY web/index.html /usr/share/nginx/html/
 
 # Copy the built application from the builder stage
 COPY --from=builder /app/web-analyzer .
 
 # Expose the application port
-EXPOSE 8080 6060 9090
+EXPOSE 8080 6060 9090 80
 
 RUN chmod +x web-analyzer
 
 # Run the web application
-ENTRYPOINT ["/root/web-analyzer"]
+CMD service nginx start && /root/web-analyzer
